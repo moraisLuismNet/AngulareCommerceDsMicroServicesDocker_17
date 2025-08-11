@@ -84,7 +84,9 @@ AngulareCommerceDsMicroServicesDocker_17/
 │   │   │   ├───register.component.css  
 │   │   │   ├───register.component.html  
 │   │   │   └───register.component.ts  
-│   │   └───shared.module.ts  
+│   │   ├───services/  
+│   │   │   └───cart-events.service.ts  
+│   │   └───shared.module.ts    
 │   ├───app.component.css  
 │   ├───app.component.html    
 │   ├───app.component.ts  

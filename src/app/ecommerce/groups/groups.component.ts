@@ -1,6 +1,5 @@
-import { Component, ViewChild, ElementRef, ChangeDetectorRef, inject, afterNextRender, afterRender, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ViewChild, ElementRef, ChangeDetectorRef, inject, afterNextRender, afterRender, ChangeDetectionStrategy, DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Subject, takeUntil } from 'rxjs';
 import { NgForm, FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { ConfirmationService } from 'primeng/api';
@@ -17,7 +16,6 @@ import { GenresService } from '../services/genres.service';
 @Component({
   selector: 'app-groups',
   templateUrl: './groups.component.html',
-  styleUrls: ['./groups.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [
@@ -50,7 +48,7 @@ export class GroupsComponent {
     nameGroup: '',
     imageGroup: null,
     photo: null,
-    musicGenreId: 0,
+    musicGenreId: null,
     musicGenreName: '',
     musicGenre: '',
   };
@@ -61,6 +59,7 @@ export class GroupsComponent {
   private readonly genresService = inject(GenresService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly destroyRef = inject(DestroyRef);
 
 
   // Function to compare values in the select
@@ -87,7 +86,7 @@ export class GroupsComponent {
 
   getGroups() {
     this.groupsService.getGroups().pipe(
-      takeUntilDestroyed()
+      takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: (data: any) => {
 
@@ -109,7 +108,7 @@ export class GroupsComponent {
     this.isLoadingGenres = true;
     return new Promise((resolve, reject) => {
       this.genresService.getGenres().pipe(
-        takeUntilDestroyed()
+        takeUntilDestroyed(this.destroyRef)
       ).subscribe({
         next: (data: any) => {
           try {
@@ -162,7 +161,7 @@ export class GroupsComponent {
   save() {
     if (this.group.idGroup === 0) {
       this.groupsService.addGroup(this.group).pipe(
-        takeUntilDestroyed()
+        takeUntilDestroyed(this.destroyRef)
       ).subscribe({
         next: (data) => {
           this.visibleError = false;
@@ -186,7 +185,7 @@ export class GroupsComponent {
       });
     } else {
       this.groupsService.updateGroup(this.group).pipe(
-        takeUntilDestroyed()
+        takeUntilDestroyed(this.destroyRef)
       ).subscribe({
         next: (data) => {
           this.visibleError = false;
@@ -291,7 +290,7 @@ export class GroupsComponent {
 
   async deleteGroup(id: number) {
     this.groupsService.deleteGroup(id).pipe(
-      takeUntilDestroyed()
+      takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: (data) => {
         this.visibleError = false;

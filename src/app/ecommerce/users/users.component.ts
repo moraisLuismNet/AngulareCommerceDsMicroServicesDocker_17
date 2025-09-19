@@ -17,7 +17,6 @@ import { TooltipModule } from 'primeng/tooltip';
 @Component({
   selector: "app-users",
   templateUrl: "./users.component.html",
-  styleUrls: ["./users.component.css"],
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [

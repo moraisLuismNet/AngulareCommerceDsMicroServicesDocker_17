@@ -129,7 +129,7 @@ export class CartDetailsComponent {
   // Method to extract the group name from several possible locations
   private extractGroupName(detail: any): string {
     if (!detail) return 'Sin grupo';
-    
+
     // List of possible group name locations
     const possibleGroupPaths = [
       detail.groupName,
@@ -143,12 +143,12 @@ export class CartDetailsComponent {
       detail.record?.group?.groupName,
       detail.record?.recordGroup?.groupName
     ];
-    
+
     // Find the first valid value
-    const groupName = possibleGroupPaths.find(name => 
+    const groupName = possibleGroupPaths.find(name =>
       name !== undefined && name !== null && name !== '' && name !== 'N/A'
     );
-    
+
     return groupName || 'Sin grupo';
   }
 
@@ -160,11 +160,11 @@ export class CartDetailsComponent {
         map((response: any) => {
           // Handle different response formats
           let details = [];
-          
+
           // Handle array response
           if (Array.isArray(response)) {
             details = response;
-          } 
+          }
           // Handle { $id: "1", $values: [...] } format
           else if (response && response.$values && Array.isArray(response.$values)) {
             details = response.$values;
@@ -173,7 +173,7 @@ export class CartDetailsComponent {
           else if (response && response.Items) {
             details = response.Items;
           }
-          
+
           // Process each detail to ensure it has all required fields
           return details.map((detail: any) => {
             // Extract group information from various possible locations
@@ -223,11 +223,11 @@ export class CartDetailsComponent {
         )
         .subscribe((record) => {
           if (!record) return;
-          
+
           const index = this.filteredCartDetails.findIndex(
             (d) => d.recordId === detail.recordId
           );
-          
+
           if (index !== -1) {
             const updatedDetail = {
               ...this.filteredCartDetails[index],
@@ -237,14 +237,14 @@ export class CartDetailsComponent {
               price: record.price || 0,
               imageRecord: record.imageRecord || record.photo || 'assets/img/placeholder.png'
             } as ExtendedCartDetail;
-            
+
             // Update the array immutably
             this.filteredCartDetails = [
               ...this.filteredCartDetails.slice(0, index),
               updatedDetail,
               ...this.filteredCartDetails.slice(index + 1)
             ];
-            
+
             // Update the cart details array as well for consistency
             const cartDetailIndex = this.cartDetails.findIndex(
               d => d.recordId === detail.recordId
@@ -334,33 +334,43 @@ export class CartDetailsComponent {
     if (!this.currentViewedEmail || detail.amount <= 0) return;
 
     try {
+      // Update UI optimistically first for better user experience
+      const itemIndex = this.filteredCartDetails.findIndex(
+        (d) => d.recordId === detail.recordId
+      );
+      
+      if (itemIndex !== -1) {
+        const updatedItem = {
+          ...this.filteredCartDetails[itemIndex],
+          amount: Math.max(0, (this.filteredCartDetails[itemIndex].amount || 0) - 1),
+        };
+        
+        this.filteredCartDetails[itemIndex] = updatedItem;
+        
+        // If amount becomes 0, remove the item from filteredCartDetails
+        if (updatedItem.amount === 0) {
+          this.filteredCartDetails = this.filteredCartDetails.filter(
+            (d) => d.recordId !== detail.recordId
+          );
+        }
+        
+        // Update cart totals immediately
+        this.updateCartTotals();
+      }
+
+      // Make the API call to remove from cart
       await this.cartDetailService
         .removeFromCartDetail(this.currentViewedEmail, detail.recordId, 1)
         .toPromise();
 
-      // Update UI locally first for better user experience
-      const itemIndex = this.filteredCartDetails.findIndex(
-        (d) => d.recordId === detail.recordId
-      );
-      if (itemIndex !== -1) {
-        const updatedItem = {
-          ...this.filteredCartDetails[itemIndex],
-          amount: Math.max(
-            0,
-            (this.filteredCartDetails[itemIndex].amount || 0) - 1
-          ),
-        };
-        this.filteredCartDetails[itemIndex] = updatedItem;
-        this.updateCartTotals();
-      }
-
-      // Refresh data from the server
+      // Refresh data from the server to ensure consistency
       await this.loadCartDetails(this.currentViewedEmail);
 
       // Update the stock value in the UI
       const updatedRecord = await this.cartDetailService
         .getRecordDetails(detail.recordId)
         .toPromise();
+        
       if (updatedRecord) {
         const stockIndex = this.filteredCartDetails.findIndex(
           (d) => d.recordId === detail.recordId
@@ -370,24 +380,43 @@ export class CartDetailsComponent {
         }
       }
 
+      // Update cart totals again after all changes
+      this.updateCartTotals();
+      
+      // Explicitly sync the cart with the backend to ensure consistent state
+      this.cartService.syncCartWithBackend(this.currentViewedEmail);
+
       this.showAlert('Product removed from cart', 'success');
     } catch (error) {
       console.error('Error removing from cart:', error);
       this.showAlert('Failed to remove product from cart', 'error');
       // On error, reload the cart from server to ensure UI is in sync with backend
       await this.loadCartDetails(this.currentViewedEmail);
+      // Ensure cart totals are updated after error recovery
+      this.updateCartTotals();
     }
   }
 
   private updateCartTotals(): void {
+    // If there are no items, ensure we reset the cart totals
+    if (this.filteredCartDetails.length === 0) {
+      this.cartService.updateCartNavbar(0, 0);
+      this.cdr.markForCheck();
+      return;
+    }
+
+    // Calculate totals based on current cart items
     const totalItems = this.filteredCartDetails.reduce(
       (sum, d) => sum + d.amount,
       0
     );
+    
     const totalPrice = this.filteredCartDetails.reduce(
       (sum, d) => sum + (d.price || 0) * d.amount,
       0
     );
+
+    // Update the cart service with the calculated values
     this.cartService.updateCartNavbar(totalItems, totalPrice);
     this.cdr.markForCheck();
   }

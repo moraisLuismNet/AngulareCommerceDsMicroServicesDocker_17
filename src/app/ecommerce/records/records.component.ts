@@ -6,7 +6,8 @@ import {
   afterNextRender,
   afterRender,
   ChangeDetectionStrategy,
-  ChangeDetectorRef
+  ChangeDetectorRef,
+  DestroyRef
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { CommonModule } from "@angular/common";
@@ -30,7 +31,6 @@ import { UserService } from "src/app/services/user.service";
 @Component({
   selector: "app-records",
   templateUrl: "./records.component.html",
-  styleUrls: ["./records.component.css"],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [
@@ -85,6 +85,13 @@ export class RecordsComponent {
   private readonly userService = inject(UserService);
   private readonly cdr = inject(ChangeDetectorRef);
 
+  private destroyRef = inject(DestroyRef);
+
+  // Helper function to compare IDs when using ngValue with select
+  compareFn(id1: any, id2: any): boolean {
+    return id1 === id2;
+  }
+
   constructor() {
     // Load initial data
     this.getRecords();
@@ -92,7 +99,7 @@ export class RecordsComponent {
 
     // Subscribe to stock updates
     this.stockService.stockUpdate$
-      .pipe(takeUntilDestroyed())
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((update) => {
         if (!update) return;
         
@@ -111,7 +118,7 @@ export class RecordsComponent {
 
     // Subscribe to cart updates
     this.cartService.cart$
-      .pipe(takeUntilDestroyed())
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((cartItems) => {
         this.records.forEach((record) => {
           const cartItem = cartItems.find(
@@ -138,7 +145,9 @@ export class RecordsComponent {
 
 
   getRecords() {
-    this.recordsService.getRecords().subscribe({
+    this.recordsService.getRecords().pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
       next: (data: any) => {
         // Extract records array from response
         let recordsArray: any[] = [];
@@ -158,7 +167,9 @@ export class RecordsComponent {
         });
 
         // Get the groups to assign names
-        this.groupsService.getGroups().subscribe({
+        this.groupsService.getGroups().pipe(
+          takeUntilDestroyed(this.destroyRef)
+        ).subscribe({
           next: (groupsResponse: any) => {
             let groups: any[] = [];
             if (Array.isArray(groupsResponse)) {
@@ -217,6 +228,38 @@ export class RecordsComponent {
     });
   }
 
+  getGroups() {
+    this.groupsService.getGroups().pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
+      next: (response: any) => {
+        let groupsArray: any[] = [];
+
+        if (Array.isArray(response)) {
+          // The answer is a direct array
+          groupsArray = response;
+        } else if (response && Array.isArray(response.$values)) {
+          // The response has property $values
+          groupsArray = response.$values;
+        } else if (response && Array.isArray(response.data)) {
+          // The response has data property
+          groupsArray = response.data;
+        } else {
+          console.warn("Unexpected API response structure:", response);
+        }
+
+        this.groups = groupsArray;
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        console.error("Error loading groups:", err);
+        this.visibleError = true;
+        this.controlError(err);
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
   filterRecords() {
     if (!this.searchText?.trim()) {
       this.filteredRecords = [...this.records];
@@ -237,36 +280,6 @@ export class RecordsComponent {
 
   onSearchChange() {
     this.filterRecords();
-  }
-
-  getGroups() {
-    this.groupsService.getGroups().subscribe({
-      next: (response: any) => {
-        // Flexible handling of different response structures
-        let groupsArray = [];
-
-        if (Array.isArray(response)) {
-          // The answer is a direct array
-          groupsArray = response;
-        } else if (Array.isArray(response.$values)) {
-          // The response has property $values
-          groupsArray = response.$values;
-        } else if (Array.isArray(response.data)) {
-          // The response has data property
-          groupsArray = response.data;
-        } else {
-          console.warn("Unexpected API response structure:", response);
-        }
-
-        this.groups = groupsArray;
-        this.cdr.markForCheck();
-      },
-      error: (err) => {
-        console.error("Error loading groups:", err);
-        this.visibleError = true;
-        this.controlError(err);
-      },
-    });
   }
 
   onChange(event: any) {
@@ -296,30 +309,37 @@ export class RecordsComponent {
 
   save() {
     if (this.record.idRecord === 0) {
-      this.recordsService.addRecord(this.record).subscribe({
-        next: (data) => {
-          this.visibleError = false;
-          this.form.reset();
-          this.getRecords();
-        },
-        error: (err) => {
-          console.log(err);
-          this.visibleError = true;
-          this.controlError(err);
-        },
-      });
-    } else {
-      this.recordsService.updateRecord(this.record).subscribe({
+      this.recordsService.addRecord(this.record).pipe(
+        takeUntilDestroyed(this.destroyRef)
+      ).subscribe({
         next: (data) => {
           this.visibleError = false;
           this.cancelEdition();
-          this.form.reset();
           this.getRecords();
           this.cdr.markForCheck();
         },
         error: (err) => {
+          console.error('Error adding record:', err);
           this.visibleError = true;
           this.controlError(err);
+          this.cdr.markForCheck();
+        },
+      });
+    } else {
+      this.recordsService.updateRecord(this.record).pipe(
+        takeUntilDestroyed(this.destroyRef)
+      ).subscribe({
+        next: (data) => {
+          this.visibleError = false;
+          this.cancelEdition();
+          this.getRecords();
+          this.cdr.markForCheck();
+        },
+        error: (err) => {
+          console.error('Error updating record:', err);
+          this.visibleError = true;
+          this.controlError(err);
+          this.cdr.markForCheck();
         },
       });
     }
@@ -337,15 +357,19 @@ export class RecordsComponent {
   }
 
   deleteRecord(id: number) {
-    this.recordsService.deleteRecord(id).subscribe({
+    this.recordsService.deleteRecord(id).pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
       next: (data: IRecord) => {
         this.visibleError = false;
         this.getRecords();
         this.cdr.markForCheck();
       },
       error: (err: any) => {
+        console.error('Error deleting record:', err);
         this.visibleError = true;
         this.controlError(err);
+        this.cdr.markForCheck();
       }
     });
   }
@@ -380,6 +404,19 @@ export class RecordsComponent {
       groupName: "",
       nameGroup: "",
     };
+    
+    // Reset the form with the default values
+    if (this.form) {
+      this.form.reset({
+        groupId: null,
+        titleRecord: "",
+        yearOfPublication: null,
+        price: 0,
+        stock: 0,
+        discontinued: false
+      });
+    }
+    
     this.cdr.markForCheck();
   }
 

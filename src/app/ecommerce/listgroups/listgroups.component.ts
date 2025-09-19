@@ -26,7 +26,6 @@ import { GenresService } from '../services/genres.service';
     DialogModule
   ],
   templateUrl: './listgroups.component.html',
-  styleUrls: ['./listgroups.component.css'],
   providers: [ConfirmationService],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

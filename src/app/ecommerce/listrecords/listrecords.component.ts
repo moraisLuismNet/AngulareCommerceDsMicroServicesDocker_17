@@ -40,7 +40,6 @@ import { IRecord } from "../ecommerce.interface";
     DialogModule
   ],
   templateUrl: "./listrecords.component.html",
-  styleUrls: ["./listrecords.component.css"],
   providers: [ConfirmationService],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -372,7 +371,13 @@ export class ListrecordsComponent {
     this.cartService
       .addToCart(record)
       .pipe(
-        finalize(() => (this.isAddingToCart = false)),
+        finalize(() => {
+          this.isAddingToCart = false;
+          // Explicitly sync the cart with the backend to ensure consistent state
+          if (this.userService.email) {
+            this.cartService.syncCartWithBackend(this.userService.email);
+          }
+        }),
         catchError(error => {
           // Revert changes if there is an error
           const revertedRecords = this.records.map(r => 
@@ -445,6 +450,10 @@ export class ListrecordsComponent {
       .pipe(
         finalize(() => {
           this.isAddingToCart = false;
+          // Explicitly sync the cart with the backend to ensure consistent state
+          if (this.userService.email) {
+            this.cartService.syncCartWithBackend(this.userService.email);
+          }
         }),
         catchError((error) => {
           // Revert local changes if there is an error

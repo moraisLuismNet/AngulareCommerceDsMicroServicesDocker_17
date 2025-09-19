@@ -1,72 +1,80 @@
-import { Component, inject, afterNextRender, afterRender, ChangeDetectionStrategy, ChangeDetectorRef, DestroyRef } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, inject, OnDestroy, afterNextRender, afterRender, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
-import { MessageService } from 'primeng/api';
-import { MessagesModule } from 'primeng/messages';
+
+// PrimeNG Modules
 import { ToastModule } from 'primeng/toast';
-import { ILogin, ILoginResponse } from 'src/app/interfaces/login.interface';
+import { MessageService } from 'primeng/api';
+
+// Services
 import { AppService } from 'src/app/services/app.service';
 import { AuthGuard } from 'src/app/guards/auth-guard.service';
 import { UserService } from 'src/app/services/user.service';
+
+// Interfaces
+import { ILogin, ILoginResponse } from 'src/app/interfaces/login.interface';
+
+// Third-party
 import { jwtDecode } from 'jwt-decode';
-import { Subject, takeUntil } from 'rxjs';
 
 @Component({
   selector: 'app-login',
-  templateUrl: './login.component.html',
-  styleUrls: ['./login.component.css'],
   standalone: true,
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     FormsModule,
     RouterModule,
-    MessagesModule,
     ToastModule
   ],
-  providers: [MessageService, AuthGuard],
+  templateUrl: './login.component.html',
+  styleUrls: ['./login.component.css'],
+  providers: [MessageService],
 })
-export class LoginComponent {
+export class LoginComponent implements OnDestroy {
   infoLogin: ILogin = {
     email: '',
     password: '',
     role: '',
   };
 
+  private destroyRef = effect(() => {
+    // Reactive effect that will run when dependencies change
+    // This can be used for reactive state management
+    return () => {
+      // Cleanup function for the effect
+    };
+  });
+
   private readonly router = inject(Router);
   private readonly appService = inject(AppService);
   private readonly messageService = inject(MessageService);
   private readonly authGuard = inject(AuthGuard);
   private readonly userService = inject(UserService);
-  private readonly cdr = inject(ChangeDetectorRef);
-  private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
-    // Initial setup
-    this.userService.setEmail(this.infoLogin.email);
-    
-    // Check if user is already logged in
-    if (this.authGuard.isLoggedIn()) {
-      this.router.navigateByUrl('/ecommerce/listgroups');
-    }
-
-    // afterNextRender runs once after the component is initially rendered
+    // Use afterNextRender for one-time initialization after the component is created
     afterNextRender(() => {
-      // Any DOM-dependent initialization can go here
+      this.userService.setEmail(this.infoLogin.email);
+      if (this.authGuard.isLoggedIn()) {
+        this.router.navigateByUrl('/ecommerce/listgroups');
+      }
     });
 
-    // afterRender runs after every change detection cycle
+    // Use afterRender for DOM-dependent operations
     afterRender(() => {
-      // Any DOM-dependent code that needs to run after each change detection
+      // This will run after every change detection cycle
+      // Can be used for DOM measurements or other operations that need the view to be stable
     });
   }
 
+  ngOnDestroy() {
+    // Cleanup logic here
+    // The destroyRef will automatically clean up the effect when the component is destroyed
+  }
+
   login() {
-    this.appService.login(this.infoLogin).pipe(
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe({
+    this.appService.login(this.infoLogin).subscribe({
       next: (data: ILoginResponse) => {
         const decodedToken: any = jwtDecode(data.token);
         const role = decodedToken['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
@@ -83,7 +91,6 @@ export class LoginComponent {
         
         this.userService.setEmail(email);
         this.userService.setRole(role);
-        this.cdr.markForCheck();
         
         // Redirect based on role
         this.userService.redirectBasedOnRole();
@@ -94,10 +101,7 @@ export class LoginComponent {
           summary: 'Error',
           detail: 'Incorrect credentials',
         });
-        this.cdr.markForCheck();
       },
     });
   }
-
-
 }

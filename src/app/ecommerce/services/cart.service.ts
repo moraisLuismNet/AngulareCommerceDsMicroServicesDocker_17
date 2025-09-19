@@ -88,10 +88,17 @@ export class CartService implements OnDestroy {
   }
 
   private updateCartState(cartItems: IRecord[]): void {
+    this.cart = [...cartItems];
     this.cartSubject.next(cartItems);
     this.updateCartCount(cartItems);
     this.calculateAndUpdateLocalTotal();
     this.saveCartForUser(this.userService.email || '', cartItems);
+    
+    // If cart is empty, ensure both count and total are zero
+    if (cartItems.length === 0) {
+      this.cartItemCountSubject.next(0);
+      this.cartTotalSubject.next(0);
+    }
   }
 
   private shouldSyncCart(email: string | null): boolean {
